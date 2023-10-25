@@ -1,0 +1,9 @@
+[package]
+name = "z32"
+version = "0.1.0"
+authors = ["Nuh <nuh@nuh.dev>"]
+edition = "2021"
+description = "zero-dependency `no-std` compatible MIT licensed encoding and decoding of z-bas32"
+license = "MIT"
+repository = "https://github.com/nuhvi/z32"
+
