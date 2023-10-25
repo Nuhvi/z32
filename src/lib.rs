@@ -39,7 +39,7 @@ pub fn encode(buf: &[u8]) -> String {
         bits / 5
     } else {
         bits / 5 + 1
-    } as usize;
+    };
 
     let mut s = Vec::with_capacity(capacity);
 
@@ -150,14 +150,13 @@ pub fn decode(s: &[u8]) -> Result<Vec<u8>, Z32Error> {
     Ok(out[0..position_bits + 5].to_vec())
 }
 
-pub fn quintet(string: &[u8], position: usize) -> Result<u8, Z32Error> {
+fn quintet(string: &[u8], position: usize) -> Result<u8, Z32Error> {
     let c = string[position];
 
-    if let Some(index) = CHARACTER_CODE_TO_INDEX[c as usize] {
-        return Ok(index as u8);
-    };
-
-    Err(Z32Error::InvalidCharacter(c.into(), position))
+    match CHARACTER_CODE_TO_INDEX[c as usize] {
+        Some(index) => Ok(index),
+        None => Err(Z32Error::InvalidCharacter(c.into(), position)),
+    }
 }
 
 #[derive(Debug, PartialEq)]
