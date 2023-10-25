@@ -5,12 +5,24 @@
 
 /// Alphabet used by zbase32
 pub const ALPHABET: &[u8; 32] = b"ybndrfg8ejkmcpqxot1uwisza345h769";
+const CHARACTER_CODE_TO_INDEX: [Option<u8>; 256] = {
+    let mut char_code_to_index: [Option<u8>; 256] = [None; 256];
+    let mut i = 0;
+    let count = 32;
 
-/// Encode first N `bits` with zbase32.
-///
-/// # Panics
-///
-/// Panics if `data` is shorter than N `bits`.
+    loop {
+        if i >= count {
+            break;
+        }
+
+        let char_code = ALPHABET[i];
+        char_code_to_index[char_code as usize] = Some(i as u8);
+        i += 1;
+    }
+    char_code_to_index
+};
+
+/// Encode bytes using zbase32.
 ///
 /// # Examples
 ///
@@ -18,10 +30,11 @@ pub const ALPHABET: &[u8; 32] = b"ybndrfg8ejkmcpqxot1uwisza345h769";
 /// use z32;
 ///
 /// let data = "The quick brown fox jumps over the lazy dog. 👀";
-/// assert_eq!(z32::encode(data.as_bytes(), 64), "ktwgkedtqiwsg");
+/// assert_eq!(z32::encode(data.as_bytes()),
+///            "ktwgkedtqiwsg43ycj3g675qrbug66bypj4s4hdurbzzc3m1rb4go3jyptozw6jyctzsqmty6nx3dyy");
 /// ```
-///
-pub fn encode(buf: &[u8], bits: usize) -> String {
+pub fn encode(buf: &[u8]) -> String {
+    let bits = buf.len() * 8;
     let capacity = if bits % 5 == 0 {
         bits / 5
     } else {
@@ -50,52 +63,207 @@ pub fn encode(buf: &[u8], bits: usize) -> String {
     unsafe { String::from_utf8_unchecked(s) }
 }
 
-/// Encode full bytes using zbase32.
+/// Decode zbase32 encoded string
 ///
-/// Just like `encode` but doesn't allow encoding with bit precision.
+/// This decodes full bytes. For instance, if you have `b"yy"`, you'll get one
+/// byte back. `b"yy"` can enode 10 bits (2 * 5) which is truncated at the next
+/// lower byte boundary.
 ///
 /// # Examples
 ///
 /// ```
 /// use z32;
 ///
-/// let data = "The quick brown fox jumps over the lazy dog. 👀";
-/// assert_eq!(z32::encode_full_bytes(data.as_bytes()),
-///            "ktwgkedtqiwsg43ycj3g675qrbug66bypj4s4hdurbzzc3m1rb4go3jyptozw6jyctzsqmty6nx3dyy");
+/// assert_eq!(z32::decode(b"qb1ze3m1").unwrap(), b"peter");
 /// ```
-pub fn encode_full_bytes(buf: &[u8]) -> String {
-    encode(buf, buf.len() * 8)
+pub fn decode(s: &[u8]) -> Result<Vec<u8>, Z32Error> {
+    let mut position_bits = 0;
+    let mut position_string = 0;
+    let r = s.len() & 7;
+    let q = (s.len() - r) / 8;
+
+    let mut out: Vec<u8> = vec![0; (s.len() * 5 + 7) / 8];
+
+    for _ in 0..q {
+        let a = quintet(s, position_string)?;
+        let b = quintet(s, position_string + 1)?;
+        let c = quintet(s, position_string + 2)?;
+        let d = quintet(s, position_string + 3)?;
+        let e = quintet(s, position_string + 4)?;
+        let f = quintet(s, position_string + 5)?;
+        let g = quintet(s, position_string + 6)?;
+        let h = quintet(s, position_string + 7)?;
+
+        out[position_bits] = (a << 3) | (b >> 2);
+        out[position_bits + 1] = ((b & 0b11) << 6) | (c << 1) | (d >> 4);
+        out[position_bits + 2] = ((d & 0b1111) << 4) | (e >> 1);
+        out[position_bits + 3] = ((e & 0b1) << 7) | (f << 2) | (g >> 3);
+        out[position_bits + 4] = ((g & 0b111) << 5) | h;
+
+        position_bits += 5;
+        position_string += 8;
+    }
+
+    if r == 0 {
+        return Ok(out[0..position_bits].to_vec());
+    }
+
+    let a = quintet(s, position_string)?;
+
+    if r == 1 {
+        return Ok(vec![]);
+    }
+
+    let b = quintet(s, position_string + 1)?;
+    out[position_bits] = (a << 3) | (b >> 2);
+
+    if r == 2 {
+        return Ok(out[0..position_bits + 1].to_vec());
+    }
+
+    let c = quintet(s, position_string + 2)?;
+    let d = quintet(s, position_string + 3)?;
+    out[position_bits + 1] = ((b & 0b11) << 6) | (c << 1) | (d >> 4);
+
+    if r <= 4 {
+        return Ok(out[0..position_bits + 2].to_vec());
+    }
+
+    let e = quintet(s, position_string + 4)?;
+    out[position_bits + 2] = ((d & 0b1111) << 4) | (e >> 1);
+
+    if r <= 5 {
+        return Ok(out[0..position_bits + 3].to_vec());
+    }
+
+    let f = quintet(s, position_string + 5)?;
+    let g = quintet(s, position_string + 6)?;
+    out[position_bits + 3] = ((e & 0b1) << 7) | (f << 2) | (g >> 3);
+
+    if r <= 7 {
+        return Ok(out[0..position_bits + 4].to_vec());
+    }
+
+    let h = quintet(s, position_string + 7)?;
+    out[position_bits + 4] = ((g & 0b111) << 5) | h;
+
+    Ok(out[0..position_bits + 5].to_vec())
+}
+
+pub fn quintet(string: &[u8], position: usize) -> Result<u8, Z32Error> {
+    let c = string[position];
+
+    if let Some(index) = CHARACTER_CODE_TO_INDEX[c as usize] {
+        return Ok(index as u8);
+    };
+
+    Err(Z32Error::InvalidCharacter(c.into(), position))
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Z32Error {
+    InvalidCharacter(char, usize),
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn basic() {
-        let input = "The quick brown fox jumps over the lazy dog. 👀";
+        let s = "The quick brown fox jumps over the lazy dog. 👀";
+        let input = s.as_bytes();
 
-        {
-            let encoded = encode_full_bytes(input.as_bytes());
-            assert_eq!(
-                encoded,
-                "ktwgkedtqiwsg43ycj3g675qrbug66bypj4s4hdurbzzc3m1rb4go3jyptozw6jyctzsqmty6nx3dyy"
-            );
-        }
+        let encoded = encode(input);
+        assert_eq!(
+            encoded,
+            "ktwgkedtqiwsg43ycj3g675qrbug66bypj4s4hdurbzzc3m1rb4go3jyptozw6jyctzsqmty6nx3dyy"
+        );
 
-        // let decoded = decode_full_bytes_str(&encoded);
-        // println!("Decoded: {:?}", decoded);
-        //
+        let decoded = decode(&encoded.as_bytes()).unwrap();
+        assert_eq!(decoded, input);
+    }
 
-        {
-            let encoded = encode(input.as_bytes(), 64);
-            assert_eq!(encoded, "ktwgkedtqiwsg");
+    #[test]
+    fn random() {
+        let mut rng = rand::thread_rng();
+        let random_bytes: [u8; 32] = rng.gen();
+
+        let encoded = encode(&random_bytes);
+        assert_eq!(encoded.len(), 52);
+    }
+
+    #[test]
+    fn public_key() {
+        let s = "6ropkm1nz98qqwnotqz1tryk3mrfiw9u16iwzp1usci6kbqdfwho";
+
+        let key: [u8; 32] = [
+            241, 32, 213, 46, 66, 191, 206, 231, 80, 80, 139, 175, 40, 144, 10, 202, 200, 90, 211,
+            243, 151, 171, 75, 182, 83, 179, 43, 229, 5, 195, 45, 57,
+        ];
+
+        assert_eq!(encode(&key), s);
+        assert_eq!(decode(s.as_bytes()).unwrap(), key);
+        assert_eq!(decode(encode(&key).as_bytes()).unwrap(), key);
+    }
+
+    const TEST_DATA: &[(&str, &[u8])] = &[
+        ("", &[]),
+        ("yh", &[7]),
+        ("6n9hq", &[240, 191, 199]),
+        ("4t7ye", &[212, 122, 4]),
+        (
+            "yoearcwhngkq1s46",
+            &[4, 17, 130, 50, 156, 17, 148, 233, 91, 94],
+        ),
+        (
+            "ybndrfg8ejkmcpqxot1uwisza345h769",
+            &[
+                0, 68, 50, 20, 199, 66, 84, 182, 53, 207, 132, 101, 58, 86, 215, 198, 117, 190,
+                119, 223,
+            ],
+        ),
+    ];
+
+    #[test]
+    fn test_encode() {
+        for &(zbase32, bytes) in TEST_DATA {
+            assert_eq!(encode(bytes), zbase32);
         }
     }
 
-    // #[test]
-    // fn random() {
-    //     let mut rng = rand::thread_rng();
-    //     let random_bytes: [u8; 20] = rng.gen();
-    // }
+    #[test]
+    fn test_decode() {
+        for &(zbase32, bytes) in TEST_DATA {
+            assert_eq!(decode(zbase32.as_bytes()).unwrap(), bytes);
+        }
+
+        assert_eq!(decode("y".as_bytes()).unwrap(), &[]);
+        assert_eq!(decode("9".as_bytes()).unwrap(), &[]);
+        assert_eq!(decode("y9".as_bytes()).unwrap(), &[7]);
+    }
+
+    #[test]
+    fn test_bad_input() {
+        let test_data = [
+            ("!!!", 0),
+            ("~~~", 0),
+            ("l", 0),
+            ("I1I1I1", 0),
+            ("ybndrfg8ejkmcpqxot1uwisza345H769", 28),
+            ("bnℕe", 2),
+            ("uv", 1),
+        ];
+
+        for (input, index) in test_data {
+            assert_eq!(
+                decode(input.as_bytes()),
+                Err(Z32Error::InvalidCharacter(
+                    input.as_bytes()[index].into(),
+                    index
+                ))
+            );
+        }
+    }
 }
