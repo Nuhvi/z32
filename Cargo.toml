@@ -1,9 +1,9 @@
 [package]
 name = "z32"
-version = "1.0.0"
+version = "1.0.2"
 authors = ["Nuh <nuh@nuh.dev>"]
 edition = "2021"
-description = "zero-dependency `no-std` compatible MIT licensed encoding and decoding of z-bas32"
+description = "Zero-dependency `no_std` compatible MIT licensed implementation [z-base-32](https://philzimmermann.com/docs/human-oriented-base-32-encoding.txt) encoding."
 license = "MIT"
 repository = "https://github.com/nuhvi/z32"
 keywords = ["zbase32", "z32", "base32"]
