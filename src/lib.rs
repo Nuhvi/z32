@@ -106,15 +106,11 @@ pub fn decode(s: &[u8]) -> Result<Vec<u8>, Z32Error> {
     }
 
     let a = quintet(s, position_string)?;
-
-    if r == 1 {
-        return Ok(vec![]);
-    }
-
     let b = quintet(s, position_string + 1)?;
+
     out[position_bits] = (a << 3) | (b >> 2);
 
-    if r == 2 {
+    if r <= 2 {
         return Ok(out[0..position_bits + 1].to_vec());
     }
 
@@ -148,6 +144,10 @@ pub fn decode(s: &[u8]) -> Result<Vec<u8>, Z32Error> {
 }
 
 fn quintet(string: &[u8], position: usize) -> Result<u8, Z32Error> {
+    if position >= string.len() {
+        return Ok(0);
+    };
+
     let c = string[position];
 
     match CHARACTER_CODE_TO_INDEX[c as usize] {
@@ -204,14 +204,18 @@ mod test {
         assert_eq!(decode(encode(&key).as_bytes()).unwrap(), key);
     }
 
-    const TEST_DATA: &[(&str, &[u8])] = &[
-        ("", &[]),
-        ("yh", &[7]),
-        ("6n9hq", &[240, 191, 199]),
-        ("4t7ye", &[212, 122, 4]),
+    const TEST_DATA: &[(&str, &[u8], &str)] = &[
+        ("", &[], ""),
+        ("y", &[0], "yy"),
+        ("9", &[248], "9y"),
+        ("com", &[100, 22], "comy"),
+        ("yh", &[7], "yh"),
+        ("6n9hq", &[240, 191, 199], "6n9hq"),
+        ("4t7ye", &[212, 122, 4], "4t7ye"),
         (
             "yoearcwhngkq1s46",
             &[4, 17, 130, 50, 156, 17, 148, 233, 91, 94],
+            "yoearcwhngkq1s46",
         ),
         (
             "ybndrfg8ejkmcpqxot1uwisza345h769",
@@ -219,25 +223,22 @@ mod test {
                 0, 68, 50, 20, 199, 66, 84, 182, 53, 207, 132, 101, 58, 86, 215, 198, 117, 190,
                 119, 223,
             ],
+            "ybndrfg8ejkmcpqxot1uwisza345h769",
         ),
     ];
 
     #[test]
     fn test_encode() {
-        for &(zbase32, bytes) in TEST_DATA {
-            assert_eq!(encode(bytes), zbase32);
+        for &(_, bytes, encoded) in TEST_DATA {
+            assert_eq!(encode(bytes), encoded);
         }
     }
 
     #[test]
     fn test_decode() {
-        for &(zbase32, bytes) in TEST_DATA {
+        for &(zbase32, bytes, _) in TEST_DATA {
             assert_eq!(decode(zbase32.as_bytes()).unwrap(), bytes);
         }
-
-        assert_eq!(decode("y".as_bytes()).unwrap(), &[]);
-        assert_eq!(decode("9".as_bytes()).unwrap(), &[]);
-        assert_eq!(decode("y9".as_bytes()).unwrap(), &[7]);
     }
 
     #[test]
