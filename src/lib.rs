@@ -1,4 +1,4 @@
-//! Zero-dependency `no_std` compatible MIT licensed implementation [z-base-32](https://philzimmermann.com/docs/human-oriented-base-32-encoding.txt) encoding.
+//! Zero-dependency compatible MIT licensed implementation [z-base-32](https://philzimmermann.com/docs/human-oriented-base-32-encoding.txt) encoding.
 
 /// Alphabet used by zbase32
 pub const ALPHABET: &[u8; 32] = b"ybndrfg8ejkmcpqxot1uwisza345h769";
@@ -160,6 +160,8 @@ fn quintet(string: &[u8], position: usize) -> Result<u8, Z32Error> {
 pub enum Z32Error {
     InvalidCharacter(char, usize),
 }
+
+impl std::error::Error for Z32Error {}
 
 impl std::fmt::Display for Z32Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
