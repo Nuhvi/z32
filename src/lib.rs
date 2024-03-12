@@ -161,6 +161,16 @@ pub enum Z32Error {
     InvalidCharacter(char, usize),
 }
 
+impl std::fmt::Display for Z32Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Z32Error::InvalidCharacter(char, index) => {
+                write!(f, "Invalid z-base32 character {} at index {}", char, index)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
