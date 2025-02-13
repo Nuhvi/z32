@@ -176,7 +176,7 @@ impl std::fmt::Display for Z32Error {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::Rng;
+    use rand::fill;
 
     #[test]
     fn basic() {
@@ -195,8 +195,8 @@ mod test {
 
     #[test]
     fn random() {
-        let mut rng = rand::thread_rng();
-        let random_bytes: [u8; 32] = rng.gen();
+        let mut random_bytes: [u8; 32] = [0; 32];
+        fill(&mut random_bytes);
 
         let encoded = encode(&random_bytes);
         assert_eq!(encoded.len(), 52);
